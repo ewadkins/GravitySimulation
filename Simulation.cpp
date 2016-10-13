@@ -19,6 +19,8 @@ void start(time_t timer) {
     int width = 800;
     int height = 800;
     int pointCount = 500;
+    int trailCount = 1000;
+    int trailIndex = 0;
     int normalCount = 50;
     
     std::vector<std::pair<double, double> > positions;
@@ -34,6 +36,9 @@ void start(time_t timer) {
             positions.push_back(std::pair<double, double>(randX, randY));
         }
     }
+    
+    std::vector<std::pair<double, double> > trails(trailCount);
+
     
     std::vector<std::pair<double, double> > velocities;
     for (int i = 0; i < positions.size(); i++) {
@@ -96,10 +101,17 @@ void start(time_t timer) {
         for (int i = 0; i < positions.size(); i++) {
             positions[i].first = positions[i].first + velocities[i].first;
             positions[i].second = positions[i].second + velocities[i].second;
+            trails[trailIndex % trailCount] = positions[i];
+            trailIndex++;
         }
         
         cv::Mat display(cv::Size(width, height), CV_8UC3);
         display = cv::Scalar(0, 0, 0);
+        for (int i = 0; i < trails.size(); i++) {
+            cv::Scalar color = cv::Scalar(255, 255, 255);
+            cv::circle(display, cv::Point(trails[i].first, trails[i].second),
+                       1, color, -1);
+        }
         for (int i = 0; i < positions.size(); i++) {
             cv::Scalar color = cv::Scalar(fmax(0, 255 - scales[i] * 5), 255, 255);
             if (scales[i] > 51) {
@@ -133,6 +145,12 @@ void start(time_t timer) {
             positions[i].first += shiftX;
             positions[i].second += shiftY;
         }
+        /*if (shiftX > 5 || shiftY > 5) {
+            for (int i = 0; i < trails.size(); i++) {
+                trails[i].first = -1;
+                trails[i].second = -1;
+            }
+        }*/
 
         
         if (count % 1 == 0) {
