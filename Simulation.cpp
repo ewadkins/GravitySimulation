@@ -21,33 +21,46 @@ void start(time_t timer) {
     int pointCount = 500;
     int trailCount = 1000;
     int trailIndex = 0;
-    int normalCount = 50;
+    double scale = 1;
+    double offsetX = 0.0;
+    double offsetY = 0.0;
+    int speed = 1;
+    
+    int radiusNormalization = 1;
+    int sizeNormalization = 50;
     
     std::vector<std::pair<double, double> > positions;
+    std::vector<std::pair<double, double> > trails(trailCount);
+    std::vector<std::pair<double, double> > velocities;
+    std::vector<double> scales;
+    
     for (int i = 0; i < pointCount; i++) {
-        double randX = rand() % (int) (width * 1.0) + width * 0.0;
-        double randY = rand() % (int) (height * 1.0) + height * 0.0;
+        //double x = rand() % (int) (width * 1.0) + width * 0.0;
+        //double y = rand() % (int) (height * 1.0) + height * 0.0;
+        double r = 0.0;
+        for (int j = 0; j < radiusNormalization; j++) {
+            r += (double) (rand() % (int) (fmin(width, height) / 2)) / radiusNormalization;
+        }
+        double theta = (double) rand() / RAND_MAX * 2 * M_PI;
+        double x = r * sin(theta) + width / 2;
+        double y = r * cos(theta) + height / 2;
         double size = 0.0;
-        for (int j = 0; j < normalCount; j++) {
-            size += (double) rand() / RAND_MAX / normalCount;
+        for (int j = 0; j < sizeNormalization; j++) {
+            size += (double) rand() / RAND_MAX / sizeNormalization;
         }
         size = (int) fmax(1, sqrt(fabs(0.5 - size)) * 10);
         for (int j = 0; j < size; j++) {
-            positions.push_back(std::pair<double, double>(randX, randY));
+            positions.push_back(std::pair<double, double>(x, y));
+            //velocities.push_back(std::pair<double, double>(sin(theta + M_PI / 2) / fmax(5, sqrt(r)) * 10 * (rand() % 2 == 0 ? -1 : 1), cos(theta + M_PI / 2) / fmax(5, sqrt(r)) * 10 * (rand() % 2 == 0 ? -1 : 1)));
         }
     }
     
-    std::vector<std::pair<double, double> > trails(trailCount);
-
-    
-    std::vector<std::pair<double, double> > velocities;
     for (int i = 0; i < positions.size(); i++) {
         double randX = (double) rand() / RAND_MAX - 0.5;
         double randY = (double) rand() / RAND_MAX - 0.5;
-        velocities.push_back(std::pair<double, double>(randX * 8, randY * 8));
+        velocities.push_back(std::pair<double, double>(randX * 12, randY * 12));
     }
     
-    std::vector<int> scales;
     for (int i = 0; i < positions.size(); i++) {
         scales.push_back(1);
     }
@@ -109,78 +122,94 @@ void start(time_t timer) {
         display = cv::Scalar(0, 0, 0);
         for (int i = 0; i < trails.size(); i++) {
             cv::Scalar color = cv::Scalar(255, 255, 255);
-            cv::circle(display, cv::Point(trails[i].first, trails[i].second),
-                       1, color, -1);
+            cv::circle(display, cv::Point((trails[i].first - width / 2) / scale + width / 2 + offsetX, (trails[i].second - height / 2) / scale + height / 2 + offsetY),
+                       (int) (sqrt(1 / scale) - 0.1), color, -1);
         }
         for (int i = 0; i < positions.size(); i++) {
             cv::Scalar color = cv::Scalar(fmax(0, 255 - scales[i] * 5), 255, 255);
             if (scales[i] > 51) {
                 color = cv::Scalar(0, fmax(0, 255 - (scales[i] - 50)), 255);
             }
-            cv::circle(display, cv::Point(positions[i].first, positions[i].second),
-                       sqrt(scales[i]), color, -1);
+            cv::circle(display, cv::Point((positions[i].first - width / 2) / scale + width / 2 + offsetX, (positions[i].second - height / 2) / scale + height / 2 + offsetY),
+                       sqrt(scales[i]) / scale, color, -1);
         }
         
-        double total = 0.0;
+        double avgTotal = 0.0;
         for (int i = 0; i < scales.size(); i++) {
-            total += scales[i];
+            avgTotal += scales[i];
         }
-        double shiftX = 0.0;
-        double shiftY = 0.0;
+        double avgX = 0.0;
+        double avgY = 0.0;
         for (int i = 0; i < positions.size(); i++) {
-            shiftX += positions[i].first * scales[i] / total;
-            shiftY += positions[i].second * scales[i] / total;
+            avgX += positions[i].first * scales[i] / avgTotal;
+            avgY += positions[i].second * scales[i] / avgTotal;
         }
-        for (int i = 0; i < positions.size(); i++) {
-            double dist = sqrt(pow(positions[i].first - shiftX, 2) + pow(positions[i].second - shiftY, 2));
-            if (dist > 3000) {
+        
+        // Remove if too far away
+        /*for (int i = 0; i < positions.size(); i++) {
+            double dist = sqrt(pow(positions[i].first - avgX, 2) + pow(positions[i].second - avgY, 2));
+            if (dist > fmin(width, height) * 4) {
                 positions.erase(positions.begin() + i);
                 velocities.erase(velocities.begin() + i);
                 scales.erase(scales.begin() + i);
             }
-        }
-        shiftX = width / 2 - shiftX;
-        shiftY = height / 2 - shiftY;
+            
+        }*/
+        
+        // Adjust frame of reference
+        double shiftX = width / 2 - avgX;
+        double shiftY = height / 2 - avgY;
         for (int i = 0; i < positions.size(); i++) {
             positions[i].first += shiftX;
             positions[i].second += shiftY;
         }
-        /*if (shiftX > 5 || shiftY > 5) {
-            for (int i = 0; i < trails.size(); i++) {
-                trails[i].first = -1;
-                trails[i].second = -1;
-            }
-        }*/
+        for (int i = 0; i < trails.size(); i++) {
+            trails[i].first += shiftX;
+            trails[i].second += shiftY;
+        }
+        for (int i = 0; i < velocities.size(); i++) {
+            velocities[i].first += shiftX;
+            velocities[i].second += shiftY;
+        }
 
         
-        if (count % 1 == 0) {
+        if (count % speed == 0) {
             // Display image
             cv::imshow("Simulation", display);
 
             // Handle keyboard input
             int key = cv::waitKey(1);
-            /*if (key == 63232) {
-                for (int i = 0; i < positions.size(); i++) {
-                    positions[i].second += 5;
-                }
+            if (key == 63232) { // up
+                offsetY += 5;
             }
-            if (key == 63233) {
-                for (int i = 0; i < positions.size(); i++) {
-                    positions[i].second -= 5;
-                }
+            if (key == 63233) { // down
+                offsetY -= 5;
             }
-            if (key == 63234) {
-                for (int i = 0; i < positions.size(); i++) {
-                    positions[i].first += 5;
-                }
+            if (key == 63234) { // left
+                offsetX += 5;
             }
-            if (key == 63235) {
-                for (int i = 0; i < positions.size(); i++) {
-                    positions[i].first -= 5;
-                }
-            }*/
-            if (key == 27) {
+            if (key == 63235) { // right
+                offsetX -= 5;
+            }
+            else if (key == 61) { // plus
+                scale *= 3.0/4;
+                scale = fmax(scale, pow(3.0/4, 5));
+            }
+            else if (key == 45) { // minus
+                scale *= 4.0/3;
+            }
+            else if (key == 115) { // s (slow)
+                speed -= 1;
+                speed = fmax(1, speed);
+            }
+            else if (key == 102) { // f (fast)
+                speed += 1;
+            }
+            else if (key == 27) { // esc
                 exit(0);
+            }
+            else if (key != -1) {
+                //std::cout << key << std::endl;
             }
         }
 
