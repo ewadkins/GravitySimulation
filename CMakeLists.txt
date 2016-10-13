@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( GravitySimulation )
+find_package( OpenCV REQUIRED )
+add_executable( Simulation Simulation.cpp )
+target_link_libraries( Simulation ${OpenCV_LIBS} )
